@@ -1,0 +1,7 @@
+KafkaClient {
+    com.sun.security.auth.module.Krb5LoginModule required
+    useKeyTab=true
+    storeKey=true
+    keyTab="<fullpath/kafka_export.keytab>"
+    principal="<kerberos principal>@<kerberos realm>";
+};
