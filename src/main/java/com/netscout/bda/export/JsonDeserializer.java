@@ -10,8 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.SortedMap;
 
 /**
  * An JSON deserializer to be used with Kafka.  Takes the JSON byte data off of the topic and reads it into a Map
@@ -42,7 +42,7 @@ public class JsonDeserializer implements Deserializer<Map<String, Object>> {
      */
     public Map<String, Object> deserialize(String topic, byte[] data) {
         try {
-            return mapper.readValue(data, 0, data.length, new TypeReference<LinkedHashMap<String, Object>>() {
+            return mapper.readValue(data, 0, data.length, new TypeReference<SortedMap<String, Object>>() {
             });
         } catch (JsonGenerationException | JsonMappingException e) {
             logger.error("JSON Error", e);
