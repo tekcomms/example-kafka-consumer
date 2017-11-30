@@ -80,12 +80,16 @@ public class CsvWriter {
      * @param map byte array containing JSON data
      */
     public void write(Map<String, Object> map) {
-        if (csvPrinter == null || currentRecords >= maxRecords) {
-            csvPrinter = rotateFile();
-        }
+        if(map != null  && map.size() > 0) {
+            if (csvPrinter == null || currentRecords >= maxRecords) {
+                csvPrinter = rotateFile();
+            }
 
-        writeCsv(map);
-        currentRecords++;
+            writeCsv(map);
+            currentRecords++;
+        } else {
+            logger.info("CsvWriter: Skipping null or empty map!");
+        }
     }
 
     /**
@@ -95,21 +99,17 @@ public class CsvWriter {
      */
     private void writeCsv(Map<String, Object> map) {
         try {
-            if (map != null) {
-                if (currentRecords == 0) {
-                    csvPrinter.printRecord(map.keySet());
-                    if (drain > 0) {
-                        logger.info("=============================================");
-                        logger.info(" Sample Record for topic '{}' : {}", topic, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(map));
-                    }
+            if (currentRecords == 0) {
+                csvPrinter.printRecord(map.keySet());
+                if (drain > 0) {
+                    logger.info("=============================================");
+                    logger.info(" Sample Record for topic '{}' : {}", topic, map.toString());
                 }
-                if (currentRecords > 0 && currentRecords < drain && drain > 0) {
-                    logger.info("{}", mapper.writerWithDefaultPrettyPrinter().writeValueAsString(map));
-                }
-                csvPrinter.printRecord(map.values());
-            } else {
-                logger.info("CsvWriter: Skipping null map!");
             }
+            if (currentRecords > 0 && currentRecords < drain && drain > 0) {
+                logger.info("{}", map.toString());
+            }
+            csvPrinter.printRecord(map.values());
         } catch (IOException e) {
             logger.error("Error writing CSV {}", e.getMessage());
         }
