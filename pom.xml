@@ -7,18 +7,32 @@
     <groupId>com.netscout.bda</groupId>
 
     <artifactId>bda-export-consumer-example</artifactId>
-    <version>0.1-SNAPSHOT</version>
-    <name>BDA Export Consumer Example</name>
+    <version>0.2-SNAPSHOT</version>
+    <name>nBA Export Consumer Example</name>
 
     <properties>
-        <kafkaVersion>0.10.0.0</kafkaVersion>
+        <kafkaVersion>1.0.0</kafkaVersion>
+        <schema-registry.version>4.0.0</schema-registry.version>
+
         <!-- Note that these could inherit from bda-dependency, but moving the targets down to 1.7 -->
-        <compiler.source>1.7</compiler.source>
-        <compiler.target>1.7</compiler.target>
+        <compiler.source>1.8</compiler.source>
+        <compiler.target>1.8</compiler.target>
         <maven-compiler-plugin.version>3.3</maven-compiler-plugin.version>
     </properties>
 
     <dependencies>
+
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+            <version>${schema-registry.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry</artifactId>
+            <version>${schema-registry.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
@@ -68,6 +82,11 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>1.7.21</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>1.8.1</version>
         </dependency>
 
     </dependencies>

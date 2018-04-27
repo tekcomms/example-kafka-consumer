@@ -1,6 +1,7 @@
 package com.netscout.bda.export;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.QuoteMode;
@@ -13,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -22,7 +24,7 @@ import java.util.Map;
  */
 public class CsvWriter {
 
-    private static final Logger logger = LoggerFactory.getLogger(CsvWriter.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(CsvWriter.class);
 
     private String topic;
     private String basePath = System.getProperty("user.home") + "/export/consumer";
@@ -68,7 +70,7 @@ public class CsvWriter {
                         csvPrinter.close();
                     }
                 } catch (IOException e) {
-                    logger.error("Problem closing file on exit: " + e.getMessage());
+                    LOGGER.error("Problem closing file on exit: " + e.getMessage());
                 }
             }
         }));
@@ -77,15 +79,47 @@ public class CsvWriter {
     /**
      * Write method taking the map containing a single record's key:values and writing it to a file
      *
-     * @param map byte array containing JSON data
+     * @param map byte array containing JSON/AVRO data
      */
     public void write(Map<String, Object> map) {
-        if (csvPrinter == null || currentRecords >= maxRecords) {
-            csvPrinter = rotateFile();
+        if (map != null && map.size() > 0) {
+            if (csvPrinter == null || currentRecords >= maxRecords) {
+                csvPrinter = rotateFile();
+            }
+
+            writeCsv(map);
+            currentRecords++;
+        } else {
+            LOGGER.info("CsvWriter: Skipping null or empty map!");
         }
 
-        writeCsv(map);
-        currentRecords++;
+    }
+
+    /**
+     * Write method taking the map containing a single record's key:values and writing it to a file
+     *
+     * @param record Avro record AVRO data
+     */
+    public void write(GenericRecord record) {
+
+        if (record != null) {
+            final LinkedHashMap<String, Object> map =
+                    record.getSchema().getFields().stream().collect(LinkedHashMap<String, Object>::new,
+                            (m, c) -> m.put(c.name(), record.get(c.name())),
+                            (m, u) -> {
+                            });
+            if (map != null && map.size() > 0) {
+                if (csvPrinter == null || currentRecords >= maxRecords) {
+                    csvPrinter = rotateFile();
+                }
+                writeCsv(map);
+                currentRecords++;
+            } else {
+                LOGGER.info("CsvWriter: Skipping null or empty map!");
+            }
+        } else {
+            LOGGER.info("CsvWriter: Skipping null record!");
+        }
     }
 
     /**
@@ -95,23 +129,19 @@ public class CsvWriter {
      */
     private void writeCsv(Map<String, Object> map) {
         try {
-            if (map != null) {
-                if (currentRecords == 0) {
-                    csvPrinter.printRecord(map.keySet());
-                    if (drain > 0) {
-                        logger.info("=============================================");
-                        logger.info(" Sample Record for topic '{}' : {}", topic, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(map));
-                    }
+            if (currentRecords == 0) {
+                csvPrinter.printRecord(map.keySet());
+                if (drain > 0) {
+                    LOGGER.info("=============================================");
+                    LOGGER.info(" Sample Record for topic '{}' : {}", topic, map.toString());
                 }
-                if (currentRecords > 0 && currentRecords < drain && drain > 0) {
-                    logger.info("{}", mapper.writerWithDefaultPrettyPrinter().writeValueAsString(map));
-                }
-                csvPrinter.printRecord(map.values());
-            } else {
-                logger.info("CsvWriter: Skipping null map!");
             }
+            if (currentRecords > 0 && currentRecords < drain && drain > 0) {
+                LOGGER.info("{}", map.toString());
+            }
+            csvPrinter.printRecord(map.values());
         } catch (IOException e) {
-            logger.error("Error writing CSV {}", e.getMessage());
+            LOGGER.error("Error writing CSV {}", e.getMessage());
         }
     }
 
@@ -124,7 +154,7 @@ public class CsvWriter {
         try {
             currentRecords = 0;
             if (csvPrinter != null) {
-                logger.info("Closing out current file");
+                LOGGER.info("Closing out current file");
                 csvPrinter.flush();
                 csvPrinter.close();
             }
@@ -136,10 +166,10 @@ public class CsvWriter {
             }
 
             File f = new File(csvPath + "consumer_" + topic + "_" + System.currentTimeMillis() + ".csv");
-            logger.info("Writing to file: {}", f.getAbsolutePath());
+            LOGGER.info("Writing to file: {}", f.getAbsolutePath());
             return new CSVPrinter(new FileWriter(f), CSVFormat.RFC4180.withQuoteMode(QuoteMode.MINIMAL));
         } catch (IOException e) {
-            logger.error("Problem opening file: {}", e.getMessage());
+            LOGGER.error("Problem opening file: {}", e.getMessage());
             return null;
         }
     }
