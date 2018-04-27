@@ -19,7 +19,7 @@ java -Djava.security.krb5.conf=<fullpath/krb5.conf> -Djava.security.auth.login.c
 
 Use --help to get a list of options
 
-Note:
+### Confluent Schema Registry
  Confluent Schema registry is used for Avro serialization. https://docs.confluent.io/current/app-development/index.html#java
  You may need to add the confluent repositories to your maven settings.xml to get the correct libraries.
  
