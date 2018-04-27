@@ -6,6 +6,7 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,7 +21,7 @@ import java.util.List;
  */
 public class ExportConsumerExample {
 
-    private static final Logger logger = LoggerFactory.getLogger("NETSCOUT Example Consumer");
+    private static final Logger LOGGER = LoggerFactory.getLogger("NETSCOUT Example Consumer");
 
     /**
      * Entry point, parsing arguments and creating and starting the appropriate ExportConsumer
@@ -28,9 +29,9 @@ public class ExportConsumerExample {
      */
     public static void main(final String[] args) {
 
-        logger.info("============================================================");
-        logger.info("                       Example Consumer");
-        logger.info("============================================================");
+        LOGGER.info("============================================================");
+        LOGGER.info("                       Example Consumer");
+        LOGGER.info("============================================================");
 
         try {
             CommandLineParser parser = new DefaultParser();
@@ -42,7 +43,8 @@ public class ExportConsumerExample {
                 return;
             }
 
-            ExportConsumer consumer = new ExportConsumer(getKafkaHosts(cmd), getGroup(cmd), getTopics(cmd), getBasePath(cmd), getMaxRecords(cmd));
+            ExportConsumer consumer = new ExportConsumer(getKafkaHosts(cmd), getGroup(cmd), getTopics(cmd),
+                    getBasePath(cmd), getMaxRecords(cmd),  getDeserializer(cmd), getSchemaRegistry(cmd), isAvroDeserializerType(cmd));
 
             if( isNotBlank(getTrustPassword(cmd)) ) {
                 consumer.withSecurity(getService(cmd), getClientId(cmd), getTrustFile(cmd), getTrustPassword(cmd));
@@ -51,13 +53,10 @@ public class ExportConsumerExample {
             if( cmd.hasOption("l") ) {
                 consumer.listTopics();
             } else {
-                consumer.start();
+                consumer.start(getOffset(cmd));
             }
-
-            printUsage(options);
-
         } catch(ParseException ex) {
-            logger.error ("Parse Exception: " + ex.getMessage());
+            LOGGER.error("Parse Exception: " + ex.getMessage());
         }
 
     }
@@ -72,12 +71,15 @@ public class ExportConsumerExample {
         options.addOption("g", "group", true, "Kafka consumer group. Defaults to 'export-example'");
         options.addOption("t", "topics", true, "Comma separated topics. Defaults to 'export'");
         options.addOption("l", "list-topics", false, "List Kafka topics and exit");
+        options.addOption("d", "deserializer", true, "Deserialization type (json|avro). Defaults to json");
         options.addOption("s", "service", true, "Kerberos service name for kafka. Defaults to 'kafka'");
         options.addOption("c", "client-id", true, "Kafka client id. Defaults to 'example_client'");
         options.addOption("f", "trust-file", true, "Full path to trust file. Defaults to '<home>/certs/nBA.truststore.jks");
         options.addOption("p", "trust-password", true, "Trust file password. Presence of password enables security feature");
         options.addOption("b", "base-path", true, "Base directory path for consumed records to be written in CSV format to. Defaults to /user/home/export/consumer");
         options.addOption("m", "max-records", true, "Max number of records to be written to each file.  Defaults to 1000");
+        options.addOption("o", "offset", true, "Offset to start consumer from.  0 indicates beginning, -1 indicates end. All other values or no option starts at the consumer's true position");
+        options.addOption("r", "registry", true, "URL of Schema Registry (only applicable when deserialization type is avro)");
         options.addOption("h", "help", false, "Print this message");
 
         return options;
@@ -120,6 +122,46 @@ public class ExportConsumerExample {
         } else {
             return Arrays.asList("export");
         }
+    }
+
+    /**
+     * Get the deserialization type if available, returning json if not
+     * @param cmd program command line arguments
+     * @return deserialization class
+     */
+    private static Class<? extends Deserializer> getDeserializer(final CommandLine cmd) {
+        Class<? extends Deserializer> clazz = JsonDeserializer.class;
+        if( cmd.hasOption("d") ) {
+            String deserializerType = cmd.getOptionValue("d");
+            if (deserializerType.equalsIgnoreCase("json")) {
+                clazz = JsonDeserializer.class;
+            } else if (deserializerType.equalsIgnoreCase("avro")) {
+                clazz = AvroDeserializer.class;
+            } else {
+                LOGGER.warn("Unrecognized deserializer type '{}', defaulting to json", deserializerType);
+            }
+        }
+        return clazz;
+    }
+
+    private static boolean isAvroDeserializerType(final CommandLine cmd) {
+        Class<? extends Deserializer> clazz = JsonDeserializer.class;
+        if( cmd.hasOption("d") ) {
+            return cmd.getOptionValue("d").equalsIgnoreCase("avro");
+        }
+        return false;
+    }
+
+    private static String getSchemaRegistry(CommandLine cmd) {
+        if( cmd.hasOption("r") ) {
+            if( isAvroDeserializerType(cmd) ) {
+                return cmd.getOptionValue("r");
+            } else {
+                LOGGER.warn("Schema Registry specified for non-avro based consumer. Ignoring.");
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -197,6 +239,21 @@ public class ExportConsumerExample {
             return Integer.parseInt(cmd.getOptionValue("m"));
         } else {
             return 1000;
+        }
+    }
+
+
+    /**
+     * Get the offset option if available, returning the default if not
+     * @param cmd program command line arguments
+     * @return consumer offset
+     */
+    private static int getOffset(final CommandLine cmd) {
+        if( cmd.hasOption("o") ) {
+            return Integer.parseInt(cmd.getOptionValue("o"));
+        } else {
+            //indicates default consumer behavior
+            return -99;
         }
     }
 
