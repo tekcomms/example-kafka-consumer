@@ -17,7 +17,7 @@ import java.util.Map;
  */
 public class AvroDeserializer implements Deserializer {
 
-    private static final Logger logger = LoggerFactory.getLogger(AvroDeserializer.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(AvroDeserializer.class);
 
     private static final Schema schema = new Schema.Parser().parse("{ \"type\":\"map\", \"values\": [\"string\", \"double\", \"long\", \"null\"] }");
 
@@ -34,7 +34,7 @@ public class AvroDeserializer implements Deserializer {
             BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, null);
             return reader.read(new LinkedHashMap<String, Object>(), decoder);
         } catch (Exception e) {
-            logger.error("AVRO Error", e);
+            LOGGER.error("AVRO Error", e);
         }
         return null;
     }

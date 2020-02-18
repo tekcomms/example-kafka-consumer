@@ -18,7 +18,7 @@ import java.util.SortedMap;
  */
 public class JsonDeserializer implements Deserializer<Map<String, Object>> {
 
-    private static final Logger logger = LoggerFactory.getLogger(JsonDeserializer.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(JsonDeserializer.class);
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -45,9 +45,9 @@ public class JsonDeserializer implements Deserializer<Map<String, Object>> {
             return mapper.readValue(data, 0, data.length, new TypeReference<SortedMap<String, Object>>() {
             });
         } catch (JsonGenerationException | JsonMappingException e) {
-            logger.error("JSON Error", e);
+            LOGGER.error("JSON Error", e);
         } catch (IOException e) {
-            logger.error("IO Error", e);
+            LOGGER.error("IO Error", e);
         }
 
         return null;
