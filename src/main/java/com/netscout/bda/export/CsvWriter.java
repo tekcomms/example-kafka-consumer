@@ -136,7 +136,6 @@ public class CsvWriter {
         } else {
             LOGGER.info("CsvWriter: Skipping null record!");
         }
-
     }
 
     /**

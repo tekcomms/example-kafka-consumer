@@ -13,6 +13,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
+
 import org.apache.pulsar.client.api.ClientBuilder;
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.ConsumerBuilder;
@@ -21,6 +22,7 @@ import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.api.SubscriptionInitialPosition;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -131,6 +133,27 @@ public class ExportConsumer {
         this.trustPassword = trustPassword;
     }
 
+    public void adjustOffset(final KafkaConsumer consumer, final int offset) {
+        if( offset == FROM_BEGINNING_OFFSET || offset == FROM_END_OFFSET) {
+            consumer.subscribe(topics, new ConsumerRebalanceListener() {
+                //Noop needed to satisfy the API
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                    LOGGER.info("{} topic-partitions are revoked from this consumer\n", Arrays.toString(partitions.toArray()));
+                }
+
+                //On any partitions assigned to this consumer, seek to the correct position
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                    if(offset == FROM_BEGINNING_OFFSET){
+                        LOGGER.info("Setting offset to beginning for topic partition: {}", partitions);
+                        consumer.seekToBeginning(partitions);
+                    }else if(offset == FROM_END_OFFSET){
+                        LOGGER.info("Setting it to the end for topic partition: {}", partitions);
+                        consumer.seekToEnd(partitions);
+                    }
+                }
+            });
+        }
+    }
     /**
      * Enables SASL security for the consumer
      *
