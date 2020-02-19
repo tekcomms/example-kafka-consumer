@@ -10,8 +10,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.commons.lang3.StringUtils.isNotBlank;
-
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -43,11 +42,23 @@ public class ExportConsumerExample {
                 return;
             }
 
-            ExportConsumer consumer = new ExportConsumer(getKafkaHosts(cmd), getGroup(cmd), getTopics(cmd),
-                    getBasePath(cmd), getMaxRecords(cmd),  getDeserializer(cmd), getSchemaRegistry(cmd), isAvroDeserializerType(cmd));
+            String securityProtocol = getSecurityProtocol(cmd);
+            boolean pulsarEnabled = isPulsarEnabled(cmd);
+            ExportConsumer consumer = new ExportConsumer(getKafkaHosts(cmd), getGroup(cmd), getTopics(cmd), getPartitions(cmd),
+                    getBasePath(cmd), getMaxRecords(cmd),  getDeserializer(cmd), getSchemaRegistryURL(cmd),
+                    getSchemaRegistrySslEnabled(cmd), isAvroDeserializerType(cmd), securityProtocol, pulsarEnabled, isPulsarAvroEnabled(cmd),
+                    isPulsarTlsEnabled(cmd), isPulsarTlsAuthEnabled(cmd), getPulsarThread(cmd));
 
-            if( isNotBlank(getTrustPassword(cmd)) ) {
-                consumer.withSecurity(getService(cmd), getClientId(cmd), getTrustFile(cmd), getTrustPassword(cmd));
+            if( securityProtocol.equalsIgnoreCase("sasl_ssl") ) {
+                consumer.withSaslSslSecurity(getService(cmd), getClientId(cmd), getTrustFile(cmd), getTrustPassword(cmd));
+            } else if( securityProtocol.equalsIgnoreCase("sasl_plaintext") ) {
+                consumer.withSaslSecurity(getClientId(cmd));
+            } else if( securityProtocol.equalsIgnoreCase("ssl") ) {
+                consumer.withSslSecurity(getClientId(cmd), getTrustFile(cmd), getTrustPassword(cmd), getKeyFile(cmd), getKeyPassword(cmd));
+            }
+
+            if (pulsarEnabled) {
+                consumer.withPulsarSecurity(getPulsarTrustStore(cmd), getPulsarCert(cmd), getPulsarKeyStore(cmd));
             }
 
             if( cmd.hasOption("l") ) {
@@ -70,16 +81,29 @@ public class ExportConsumerExample {
         options.addOption("k", "kafka", true, "Bootstrap Kafka hosts.  Defaults to 'localhost:9092'");
         options.addOption("g", "group", true, "Kafka consumer group. Defaults to 'export-example'");
         options.addOption("t", "topics", true, "Comma separated topics. Defaults to 'export'");
+        options.addOption("ps", "partitions", true, "Comma separated partition numbers. Default to an empty list.");
         options.addOption("l", "list-topics", false, "List Kafka topics and exit");
         options.addOption("d", "deserializer", true, "Deserialization type (json|avro). Defaults to json");
         options.addOption("s", "service", true, "Kerberos service name for kafka. Defaults to 'kafka'");
         options.addOption("c", "client-id", true, "Kafka client id. Defaults to 'example_client'");
-        options.addOption("f", "trust-file", true, "Full path to trust file. Defaults to '<home>/certs/nBA.truststore.jks");
-        options.addOption("p", "trust-password", true, "Trust file password. Presence of password enables security feature");
+        options.addOption("sp", "security-protocol", true, "Kafka security protocal. Defaults to 'plaintext'");
+        options.addOption("tf", "trust-file", true, "Full path to trust file. Defaults to '<home>/certs/nBA.truststore.jks");
+        options.addOption("tp", "trust-password", true, "Trust file password.");
+        options.addOption("kf", "key-file", true, "Full path to key file. Defaults to '<home>/certs/nBA.keystore.jks");
+        options.addOption("kp", "key-password", true, "Key file password.");
         options.addOption("b", "base-path", true, "Base directory path for consumed records to be written in CSV format to. Defaults to /user/home/export/consumer");
         options.addOption("m", "max-records", true, "Max number of records to be written to each file.  Defaults to 1000");
         options.addOption("o", "offset", true, "Offset to start consumer from.  0 indicates beginning, -1 indicates end. All other values or no option starts at the consumer's true position");
         options.addOption("r", "registry", true, "URL of Schema Registry (only applicable when deserialization type is avro)");
+        options.addOption("rs", "registry-ssl", true, "Schema Registry SSL security boolean flag. Defaults to false");
+        options.addOption("p", "pulsar", true, "Is system targeted at Apache Pulsar. Defaults to false");
+        options.addOption("ae", "pulsar-avro-enabled", true, "Is Pulsar Avro Enabled. Defaults to true");
+        options.addOption("pa", "pulsar-tls-auth", true, "Is Pulsar TLS Authenticate enabled. Defaults to false");
+        options.addOption("pe", "pulsar-tls-enabled", true, "Is Pulsar TLS enabled. Defaults to false");
+        options.addOption("pc", "pulsar-cert", true, "Full path to Pulsar Certificate file. Defaults to null");
+        options.addOption("pk", "pulsar-keystore", true, "Full path to Pulsar KeyStore file. Defaults to null");
+        options.addOption("pt", "pulsar-truststore", true, "Full path to Pulsar TrustStore file. Defaults to null");
+        options.addOption("pl", "pulsar-listener-threads", true, "Pular io thread, connection broker and listener threads. Default to 1");
         options.addOption("h", "help", false, "Print this message");
 
         return options;
@@ -125,6 +149,19 @@ public class ExportConsumerExample {
     }
 
     /**
+     * Get the Kafka partition option if available, returning the default if not
+     * @param cmd program command line arguments
+     * @return Kafka partitions
+     */
+    private static List getPartitions(final CommandLine cmd) {
+        if( cmd.hasOption("ps") ) {
+            return Arrays.asList(cmd.getOptionValue("ps").split(","));
+        } else {
+            return new ArrayList();
+        }
+    }
+
+    /**
      * Get the deserialization type if available, returning json if not
      * @param cmd program command line arguments
      * @return deserialization class
@@ -133,9 +170,9 @@ public class ExportConsumerExample {
         Class<? extends Deserializer> clazz = JsonDeserializer.class;
         if( cmd.hasOption("d") ) {
             String deserializerType = cmd.getOptionValue("d");
-            if (deserializerType.equalsIgnoreCase("json")) {
+            if (deserializerType.equalsIgnoreCase("kafka") || deserializerType.equalsIgnoreCase("json") ) {
                 clazz = JsonDeserializer.class;
-            } else if (deserializerType.equalsIgnoreCase("avro")) {
+            } else if (deserializerType.equalsIgnoreCase("kafka-avro") || deserializerType.equalsIgnoreCase("avro") ) {
                 clazz = AvroDeserializer.class;
             } else {
                 LOGGER.warn("Unrecognized deserializer type '{}', defaulting to json", deserializerType);
@@ -152,7 +189,65 @@ public class ExportConsumerExample {
         return false;
     }
 
-    private static String getSchemaRegistry(CommandLine cmd) {
+    private static boolean isPulsarEnabled(final CommandLine cmd) {
+        if( cmd.hasOption("p") ) {
+            return Boolean.valueOf(cmd.getOptionValue("p"));
+        }
+        return false;
+    }
+
+    private static boolean isPulsarAvroEnabled(final CommandLine cmd) {
+        if( cmd.hasOption("ae") ) {
+            return Boolean.valueOf(cmd.getOptionValue("ae"));
+        }
+        return true;
+    }
+
+    private static boolean isPulsarTlsEnabled(final CommandLine cmd) {
+        if( cmd.hasOption("pe") ) {
+            return Boolean.valueOf(cmd.getOptionValue("pe"));
+        }
+        return false;
+    }
+
+    private static boolean isPulsarTlsAuthEnabled(final CommandLine cmd) {
+        if( cmd.hasOption("pa") ) {
+            return Boolean.valueOf(cmd.getOptionValue("pa"));
+        }
+        return false;
+    }
+
+    private static String getPulsarCert(final CommandLine cmd) {
+        if( cmd.hasOption("pc") ) {
+            return cmd.getOptionValue("pc");
+        }
+        return null;
+    }
+
+    private static String getPulsarKeyStore(final CommandLine cmd) {
+        if( cmd.hasOption("pk") ) {
+            return cmd.getOptionValue("pk");
+        }
+        return null;
+    }
+
+    private static String getPulsarTrustStore(final CommandLine cmd) {
+        if( cmd.hasOption("pt") ) {
+            return cmd.getOptionValue("pt");
+        }
+        return null;
+    }
+
+    private static int getPulsarThread(final CommandLine cmd) {
+        if( cmd.hasOption("pl") ) {
+            return Integer.parseInt(cmd.getOptionValue("pl"));
+        } else {
+            //indicates default consumer behavior
+            return 1;
+        }
+    }
+
+    private static String getSchemaRegistryURL(CommandLine cmd) {
         if( cmd.hasOption("r") ) {
             if( isAvroDeserializerType(cmd) ) {
                 return cmd.getOptionValue("r");
@@ -162,6 +257,14 @@ public class ExportConsumerExample {
         }
 
         return null;
+    }
+
+    private static boolean getSchemaRegistrySslEnabled(CommandLine cmd) {
+        if( cmd.hasOption("rs") ) {
+            return Boolean.valueOf(cmd.getOptionValue("rs"));
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -191,13 +294,26 @@ public class ExportConsumerExample {
     }
 
     /**
+     * Get the Security Protocol option if available, returning the default if not
+     * @param cmd program command line arguments
+     * @return Security Protocol type
+     */
+    private static String getSecurityProtocol(final CommandLine cmd) {
+        if( cmd.hasOption("sp") ) {
+            return cmd.getOptionValue("sp");
+        } else {
+            return "PLAINTEXT";
+        }
+    }
+
+    /**
      * Get the SSL trust file option if available, returning the default if not
      * @param cmd program command line arguments
      * @return SSL trust file
      */
     private static String getTrustFile(final CommandLine cmd) {
-        if( cmd.hasOption("f") ) {
-            return cmd.getOptionValue("f");
+        if( cmd.hasOption("tf") ) {
+            return cmd.getOptionValue("tf");
         } else {
             return System.getProperty("user.home")+"/certs/nBA.truststore.jks";
         }
@@ -209,8 +325,34 @@ public class ExportConsumerExample {
      * @return SSL trust file password
      */
     private static String getTrustPassword(final CommandLine cmd) {
-        if( cmd.hasOption("p") ) {
-            return cmd.getOptionValue("p");
+        if( cmd.hasOption("tp") ) {
+            return cmd.getOptionValue("tp");
+        } else {
+            return "";
+        }
+    }
+
+    /**
+     * Get the SSL key file option if available, returning the default if not
+     * @param cmd program command line arguments
+     * @return SSL key file
+     */
+    private static String getKeyFile(final CommandLine cmd) {
+        if( cmd.hasOption("kf") ) {
+            return cmd.getOptionValue("kf");
+        } else {
+            return System.getProperty("user.home")+"/certs/nBA.keystore.jks";
+        }
+    }
+
+    /**
+     * Get the SSL key file password option if available, returning the default if not
+     * @param cmd program command line arguments
+     * @return SSL key file password
+     */
+    private static String getKeyPassword(final CommandLine cmd) {
+        if( cmd.hasOption("kp") ) {
+            return cmd.getOptionValue("kp");
         } else {
             return "";
         }

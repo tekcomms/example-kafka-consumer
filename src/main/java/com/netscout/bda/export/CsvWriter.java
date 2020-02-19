@@ -62,16 +62,14 @@ public class CsvWriter {
     }
 
     private void init() {
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            public void run() {
-                try {
-                    if (csvPrinter != null) {
-                        csvPrinter.flush();
-                        csvPrinter.close();
-                    }
-                } catch (IOException e) {
-                    LOGGER.error("Problem closing file on exit: " + e.getMessage());
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                if (csvPrinter != null) {
+                    csvPrinter.flush();
+                    csvPrinter.close();
                 }
+            } catch (IOException e) {
+                LOGGER.error("Problem closing file on exit: " + e.getMessage());
             }
         }));
     }
@@ -112,11 +110,29 @@ public class CsvWriter {
                 if (csvPrinter == null || currentRecords >= maxRecords) {
                     csvPrinter = rotateFile();
                 }
-                writeCsv(map);
+                write(map);
                 currentRecords++;
             } else {
-                LOGGER.info("CsvWriter: Skipping null or empty map!");
+                LOGGER.info("CsvWriter: Skipping null!");
             }
+        } else {
+            LOGGER.info("CsvWriter: Skipping null record!");
+        }
+    }
+
+    /**
+     * Write method taking the map containing a single record's key:values and writing it to a file
+     *
+     * @param record Pulsar Avro record AVRO data
+     */
+    public void write(org.apache.pulsar.client.api.schema.GenericRecord record) {
+        if (record != null) {
+            final LinkedHashMap<String, Object> map =
+                    record.getFields().stream().collect(LinkedHashMap::new,
+                            (m, c) -> m.put(c.getName(), record.getField(c)),
+                            (m, u) -> {
+                            });
+            write(map);
         } else {
             LOGGER.info("CsvWriter: Skipping null record!");
         }
