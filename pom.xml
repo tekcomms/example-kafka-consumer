@@ -13,7 +13,7 @@
     <properties>
         <kafkaVersion>1.0.0</kafkaVersion>
         <schema-registry.version>4.0.0</schema-registry.version>
-        <jackson.version>2.9.8</jackson.version>
+        <jackson.version>2.12.6.1</jackson.version>
         <pulsar.version>2.4.0</pulsar.version>
 
         <!-- Note that these could inherit from bda-dependency, but moving the targets down to 1.7 -->
